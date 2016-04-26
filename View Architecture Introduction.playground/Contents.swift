@@ -8,7 +8,7 @@ XCPlaygroundPage.currentPage.needsIndefiniteExecution = true
 
 /*:
 
- # Motivation
+ # Screens as Functions
  
  We want to declare our app as a series of dependent screens. Like:
  
@@ -18,7 +18,7 @@ XCPlaygroundPage.currentPage.needsIndefiniteExecution = true
  
      • If ??? then 🖥 3 ➡ 👆, 👆 ➡ 👍
 
- ## How it is Done
+ ## First Attempts
  
  The above diagram makes a screen behave like a function: `(Input) -> Output`. If we use Rx, we might model this as `(Input) -> Observable<Output>`. With this signature, we can easily chain screens together using `flatMap`. 
  
@@ -74,11 +74,11 @@ extension Observable {
  
  With this, we should be able to do: 
  
-     func cachedDataScreen2WillSet() -> Observable<Void>? {
+     func cachedDataScreen2IsResponsibleFor() -> Observable<Void>? {
          return Observable.just()
      }
  
-     start(screen1).then(screen2, ifNotPresent: cachedDataScreen2WillSet).run()
+     start(screen1).then(screen2, ifNotPresent: cachedDataScreen2IsResponsibleFor).run()
  
  */
 
@@ -123,21 +123,20 @@ struct Effect1<Effects, O: ObservableType> {
  
  ## Side Effects
  
- Screens also have side effects. This gets a bit tricky. We'll make side effects optional for convenience and tie subscription resources to the lifetime of the Screen's effect.
+ Screens also have side effects. In order to explicitly manage these side-effects, we'll extend the `Effect` object to also take an optional side effect. Callers can completely specify the effect of the screen and also be in control of the side-effects. One particular advantage is that we can tie subscription resources to the lifetime of the Screen's effect.
  
  An example of what this will enable us to do:
  
-     let screen3: (Void) -> (Observable<String>, Observable<Int>) = ...
- 
-     let screen3Effects = Effect<(Observable<String>, Observable<Int>), String>(
-         transform: { $0.0 },
-         sideEffects: { [
-             $0.1.debug().subscribe()
-         ] })
-     
      start(screen1)
          .then(screen2)
-         .then(screen3Effects.from(screen3)).run()
+         .then(Effect(
+             transform: { $0.0 },
+             sideEffects:
+                 { [
+                     $0.1.debug().subscribe()
+                 ] })
+             .from(screen3))
+         .run()
  
  */
 
@@ -164,15 +163,3 @@ struct Effect<Effects, Output> {
     }
 }
 
-let screen3: (Void) -> (Observable<String>, Observable<Int>) = { (Observable.empty(), Observable.empty()) }
-
-let screen3Effects = Effect<(Observable<String>, Observable<Int>), String>(
-    transform: { $0.0 },
-    sideEffects: { [
-        $0.1.debug().subscribe()
-        ] })
-
-
-start(screen1)
-    .then(screen2)
-    .then(screen3Effects.from(screen3)).run()
