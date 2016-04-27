@@ -2,63 +2,18 @@
 
 import UIKit
 import RxSwift
+import RxCocoa
+import XCPlayground
 
-protocol Effect {
-    associatedtype Effects
-    associatedtype Output
-    
-    init(transform: Effects -> Observable<Output>, sideEffects: (Effects -> [Disposable])?)
-    
-    func from<Input>(screen: Input -> Effects) -> Input -> Observable<Output>
-}
+XCPlaygroundPage.currentPage.needsIndefiniteExecution = true
 
-struct TestEffect<Effects, Output> {
-    
-    private let transform: Effects -> Observable<Output>
-    private let sideEffects: (Effects -> [Disposable])?
-    
-    init(transform: Effects -> Observable<Output>, sideEffects: (Effects -> [Disposable])? = nil) {
-        self.transform = transform
-        self.sideEffects = sideEffects
-    }
-    
-    func from<Input>(screen: Input -> Effects) -> Input -> Observable<Output> {
-        return { input in
-            let effects = screen(input)
-            
-            return self.sideEffects.map { sideEffect in Observable.using({
-                CompositeDisposable(disposables: sideEffect(effects))
-                }, observableFactory: { _ in
-                    self.transform(effects) })
-                } ??  self.transform(effects)
-        }
-    }
-}
-
-struct StoryboardEffect<Effects, Output> {
-
-    private let transform: Effects -> Observable<Output>
-    private let sideEffects: (Effects -> [Disposable])?
-    
-    init(transform: Effects -> Observable<Output>, sideEffects: (Effects -> [Disposable])? = nil) {
-        self.transform = transform
-        self.sideEffects = sideEffects
-    }
-    
-    func from<Input>(screen: Input -> Effects) -> Input -> Observable<Output> {
-        return { input in
-            let effects = screen(input)
-            
-            return self.sideEffects.map { sideEffect in Observable.using({
-                CompositeDisposable(disposables: sideEffect(effects))
-                }, observableFactory: { _ in
-                    self.transform(effects) })
-                } ??  self.transform(effects)
-        }
-    }
-}
-
-
+/*:
+ 
+ ## Setup
+ 
+ We'll reuse a few things from the introduction
+ 
+ */
 func start<E>(screen: () -> Observable<E>, ifNotPresent condition: (() -> Observable<E>?)? = nil) -> Observable<E> {
     return Observable<E>.deferred { condition.map { $0() ?? screen() } ?? screen() }
 }
@@ -70,15 +25,82 @@ extension Observable {
     }
     
     func run() {
-        debug().subscribe()
+        subscribe()
     }
 
 }
 
-/*: 
+protocol ScreenType {
+    associatedtype Input
+    associatedtype Output
+    
+    mutating func setUp(input: Input)
+    
+    var sideEffects: Output { get }
+}
+/*:
  
- # An Example
+ ## View Setup
  
- Notice how we haven't introduced UIViewControllers at all. That's because it doesn't matter what screens are. They can be actual screens, logical screens, third-party libraries with really weird presentation styles, etc. So I've taken the `Effect` struct that
+ Notice how we haven't introduced UIViewControllers at all. That's because it doesn't matter what screens are. They can be actual screens, logical screens, third-party libraries with really weird presentation styles, etc. As seen in the introduction, all you need is a presenter to instruct how to show something to the user. In this playground example, we will use UIViews in favour of UIViewControllers.
  
  */
+class First: UIView, ScreenType {
+    
+    private var button: UIButton!
+    
+    func setUp(input: Void) {
+        backgroundColor = UIColor.greenColor()
+        button = UIButton(frame: bounds)
+        button.setTitle("Click Me", forState: .Normal)
+        
+        addSubview(button)
+    }
+    
+    var sideEffects: Observable<Void> { return button.rx_tap.asObservable() }
+}
+
+class Second: UIView, ScreenType {
+    
+    private var text: UITextField!
+    
+    func setUp(input: Void) {
+        backgroundColor = UIColor.whiteColor()
+        text = UITextField(frame: bounds)
+        
+        addSubview(text)
+    }
+    
+    var sideEffects: Observable<String> { return text.rx_text.asObservable() }
+}
+
+
+func present<S: UIView where S: ScreenType>(type: S.Type) -> S.Input -> S.Output {
+    
+    return { input in
+        
+        var vc: S
+        if type == First.self {
+            vc = First(frame: CGRect(x: 0, y: 0, width: 300, height: 100)) as! S
+        } else {
+            vc = Second(frame: CGRect(x: 0, y: 0, width: 300, height: 100)) as! S
+        }
+
+        vc.setUp(input)
+        XCPlaygroundPage.currentPage.liveView = vc
+        return vc.sideEffects
+        
+    }
+    
+}
+/*:
+ 
+ ## App Definition
+ 
+ Once we've set everything up, defining the app is pretty easy
+ 
+ */
+let first = present(First.self)
+let second = present(Second.self)
+
+start(first).then(second).debug().run()
