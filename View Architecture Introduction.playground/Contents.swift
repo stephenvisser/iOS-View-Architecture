@@ -69,11 +69,11 @@ extension Observable {
  
  With this, we should be able to do: 
  
-     func cachedDataScreen2IsResponsibleFor() -> Observable<Void>? {
+     func dataThatWouldShortCircuitScreen2() -> Observable<Void>? {
          return Observable.just()
      }
  
-     start(screen1).then(screen2, ifNotPresent: cachedDataScreen2IsResponsibleFor).run()
+     start(screen1).then(screen2, ifNotPresent: dataThatWouldShortCircuitScreen2).run()
  
  */
 func start<E>(screen: () -> Observable<E>, ifNotPresent condition: (() -> Observable<E>?)? = nil) -> Observable<E> {
@@ -159,7 +159,7 @@ struct Effect<Effects, Output> {
  Screens in iOS aren't really functions. They are UIViewControllers — objects. We need to introduce a protocol that UIViewControllers can conform to. It's pretty simple.
  
  */
-protocol ScreenType {
+protocol PresentableType {
     associatedtype Input
     associatedtype Output
     
@@ -170,7 +170,7 @@ protocol ScreenType {
 //: An example implementation
 struct ViewModel { } // Some data model
 
-class AController: UIViewController, ScreenType {
+class AController: UIViewController, PresentableType {
     let click = PublishSubject<Void>()
     let textBox = PublishSubject<String>()
     
@@ -184,21 +184,18 @@ class AController: UIViewController, ScreenType {
  
  ## Function-izing part 2
  
- We need a conversion mechanism from a `ScreenType` to function. In the world of screens, the screen must be initialized (manually or from storyboard) and presented when the function is called. In other words, we know what a screen needs (`Input`) and what its effects are (`Output`), but we need an environment that can manage this initialization and presentation
+ To go from `PresentableType` to `(Input) -> Output`, we need a `Presenter`. With a `UIViewController` that is a `PresentableType`, we must initialize (manually or from storyboard) and present (perhaps by using a navigation controller) to show the screen to the user. Showing it to the user is necessary to model the user as a function from `(Input) -> Output` — this is what a `Presenter` is for.
  
- Note that the presenter is useful as a utility to create functions from screens. It is not broadly useful since it has type information that is difficult (impossible?) to abstract away. It would be useful like this:
- 
-     class AViewController: UIViewController, ScreenType { ... }
+     class AViewController: UIViewController, PresentableType { ... }
 
      let presenter = Presenter { ... load from storyboard ... }
      let screen1 = presenter.present(AViewController.self., { ... present using navigation controller ... })
  
  */
-
-struct Presenter {
+struct ViewControllerPresenter {
     let initialization: (String) -> UIViewController
     
-    func present<S: UIViewController where S: ScreenType>(identifier: S.Type, navigation: (S) -> Void) -> S.Input -> S.Output {
+    func present<S: UIViewController where S: PresentableType>(type: S.Type, navigation: (S) -> Void) -> S.Input -> S.Output {
         
         return { input in
             

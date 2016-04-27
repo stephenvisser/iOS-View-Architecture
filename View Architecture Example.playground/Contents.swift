@@ -30,7 +30,7 @@ extension Observable {
 
 }
 
-protocol ScreenType {
+protocol PresentableType {
     associatedtype Input
     associatedtype Output
     
@@ -45,7 +45,7 @@ protocol ScreenType {
  Notice how we haven't introduced UIViewControllers at all. That's because it doesn't matter what screens are. They can be actual screens, logical screens, third-party libraries with really weird presentation styles, etc. As seen in the introduction, all you need is a presenter to instruct how to show something to the user. In this playground example, we will use UIViews in favour of UIViewControllers.
  
  */
-class First: UIView, ScreenType {
+class First: UIView, PresentableType {
     
     private var button: UIButton!
     
@@ -60,7 +60,7 @@ class First: UIView, ScreenType {
     var sideEffects: Observable<Void> { return button.rx_tap.asObservable() }
 }
 
-class Second: UIView, ScreenType {
+class Second: UIView, PresentableType {
     
     private var text: UITextField!
     
@@ -75,7 +75,7 @@ class Second: UIView, ScreenType {
 }
 
 
-func present<S: UIView where S: ScreenType>(type: S.Type) -> S.Input -> S.Output {
+func present<S: UIView where S: PresentableType>(type: S.Type) -> S.Input -> S.Output {
     
     return { input in
         
