@@ -209,3 +209,5 @@ struct ViewControllerPresenter {
     }
     
 }
+
+//: And that's it! Go to the example to see how this might look.
